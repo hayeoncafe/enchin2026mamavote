@@ -29,6 +29,8 @@ body{
   background-image:var(--mama-body,none), linear-gradient(180deg,var(--page),var(--page2));
   background-attachment:fixed; transition:background-color .25s;
 }
+@supports (-webkit-touch-callout:none){ body{background-attachment:scroll} }
+@supports (min-height:100dvh){ body{min-height:100dvh} }
 .wrap{max-width:1080px; margin:0 auto; padding:14px 14px 48px; display:grid; gap:16px}
 
 /* hero: ENCHIN logo with MAMA2026 all around it */
@@ -95,7 +97,7 @@ body{
 
 .stage{position:relative; width:100%; line-height:0; max-width:560px; margin:0 auto}
 .stage canvas{width:100%; height:auto; display:block; border-radius:16px}
-#ov{position:absolute; inset:0; user-select:none; -webkit-user-select:none}
+#ov{position:absolute; left:0; top:0; width:100%; height:100%; -webkit-touch-callout:none; user-select:none; -webkit-user-select:none}
 .empty{border:3px dashed var(--line); border-radius:20px; padding:40px 18px; text-align:center; color:var(--muted)}
 .empty strong{display:block; font-family:"Baloo 2",sans-serif; font-weight:800; font-size:20px; color:var(--text)}
 .help{margin:10px 2px 0; font-size:14px; color:var(--muted)}
@@ -104,6 +106,7 @@ body{
 .fallback img{width:100%; height:auto; border-radius:14px}
 .fallback p{margin:0; font-size:14px; color:var(--muted)}
 .foot{margin:0; text-align:center; font-size:13px; color:var(--ink); opacity:.75}
+.mark{margin:6px 0 0; text-align:center; font-size:11px; letter-spacing:.04em; color:var(--ink); opacity:.5}
 </style>
 </head>
 <body>
@@ -169,6 +172,7 @@ body{
   </div>
 
   <p class="foot">Your screenshot never leaves your device. · Version 7 (WONCHU spelling fixed)</p>
+  <p class="mark">made by @jaykemate</p>
 </div>
 
 <script>
@@ -207,9 +211,9 @@ body{
   function load(src){ return new Promise(function(res){ var im = new Image(); im.onload = function(){ res(im); }; im.onerror = function(){ res(null); }; im.src = src; }); }
   function loadAll(){
     var jobs = [];
-    ORDER.forEach(function(k){ ["main","pose","prop","flower","plate","body","title","cut"].forEach(function(p){ if(SPR[k][p]) jobs.push(load(SPR[k][p]).then(function(im){ IMG[k][p] = im; })); }); });
+    ORDER.forEach(function(k){ ["main","pose","prop","flower","plate","body","title","cut"].forEach(function(p){ if(SPR[k] && SPR[k][p]) jobs.push(load(SPR[k][p]).then(function(im){ IMG[k][p] = im; })); }); });
     IMG.enchin.busts = {};
-    Object.keys(SPR.enchin.busts).forEach(function(n){ jobs.push(load(SPR.enchin.busts[n]).then(function(im){ IMG.enchin.busts[n] = im; })); });
+    Object.keys((SPR.enchin && SPR.enchin.busts) || {}).forEach(function(n){ jobs.push(load(SPR.enchin.busts[n]).then(function(im){ IMG.enchin.busts[n] = im; })); });
     ["tagline","logo","group"].forEach(function(k){ jobs.push(load(SPR[k]).then(function(im){ IMG[k] = im; })); });
     return Promise.all(jobs);
   }
@@ -556,7 +560,19 @@ function detectTiles(img){
     drawCovers(ctx,L,it,t);
     drawUserCover(ctx,L.cx+c.x*L.cw,L.cy+c.y*L.ch,c.w*L.cw,c.h*L.ch,t);
     drawDecor(ctx,L,t);
+    drawMark(ctx,L);
     return L;
+  }
+  /* tiny credit, bottom centre of every template */
+  function drawMark(ctx,L){
+    var s = Math.max(18, Math.round(L.W*.02)), txt = "made by @jaykemate";
+    ctx.save();
+    ctx.font = "700 " + s + "px \"Baloo 2\", system-ui, -apple-system, \"Segoe UI\", Roboto, sans-serif";
+    ctx.textAlign = "center"; ctx.textBaseline = "alphabetic"; ctx.lineJoin = "round";
+    var x = L.W/2, y = L.H - Math.round(s*1.1);
+    ctx.lineWidth = Math.max(3, s*.22); ctx.strokeStyle = "rgba(17,26,43,.55)"; ctx.strokeText(txt,x,y);
+    ctx.fillStyle = "rgba(255,255,255,.92)"; ctx.fillText(txt,x,y);
+    ctx.restore();
   }
 
   /* ---------- website theme: cute ENCHIN MAMA 2026 VOTE hero ---------- */
@@ -690,13 +706,12 @@ function detectTiles(img){
 
   /* ---------- drag / resize / remove ---------- */
   function pt(e){ var r = ov.getBoundingClientRect(); return { x:(e.clientX-r.left)*ov.width/r.width, y:(e.clientY-r.top)*ov.height/r.height }; }
-  ov.addEventListener("pointerdown",function(e){
-    if(!state.item || !L) return;
-    var p = pt(e), list = boxList().reverse(), i, b, e2;
+  function begin(p){
+    var list = boxList().reverse(), i, b, e2;
     for(i=0;i<list.length && !drag;i++){          // remove button on a cover
       e2 = list[i]; if(!e2.cover) continue; b = px(e2.ref);
       var dx0 = p.x-(b.x+b.w-6), dy0 = p.y-(b.y+6);
-      if(dx0*dx0 + dy0*dy0 <= 62*62){ state.item.covers.splice(e2.i,1); say(state.item.covers.length ? "Cover removed." : "No covers left. Tap + Add a cover."); redraw(); e.preventDefault(); return; }
+      if(dx0*dx0 + dy0*dy0 <= 62*62){ state.item.covers.splice(e2.i,1); say(state.item.covers.length ? "Cover removed." : "No covers left. Tap + Add a cover."); redraw(); return true; }
     }
     for(i=0;i<list.length && !drag;i++){          // resize corner
       e2 = list[i]; b = px(e2.ref);
@@ -706,20 +721,29 @@ function detectTiles(img){
       e2 = list[i]; b = px(e2.ref);
       if(p.x >= b.x && p.x <= b.x+b.w && p.y >= b.y && p.y <= b.y+b.h){ drag = { ref:e2.ref, mode:"move", sx:p.x, sy:p.y, o:Object.assign({},e2.ref) }; }
     }
-    if(drag){ try{ ov.setPointerCapture(e.pointerId); }catch(_){} e.preventDefault(); }
-  });
-  ov.addEventListener("pointermove",function(e){
-    if(!drag) return;
-    var p = pt(e), dx = (p.x-drag.sx)/L.cw, dy = (p.y-drag.sy)/L.ch, b = drag.ref, o = drag.o;
+    return !!drag;
+  }
+  function moveTo(p){
+    var dx = (p.x-drag.sx)/L.cw, dy = (p.y-drag.sy)/L.ch, b = drag.ref, o = drag.o;
     var cl = function(v,a,z){ return Math.max(a,Math.min(z,v)); };
     if(drag.mode === "move"){ b.x = cl(o.x+dx,0,1-o.w); b.y = cl(o.y+dy,0,1-o.h); }
     else { b.w = cl(o.w+dx,.05,1-o.x); b.h = cl(o.h+dy,.03,1-o.y); }
     schedule();
-  });
+  }
   var endDrag = function(){ drag = null; };
-  ov.addEventListener("pointerup",endDrag); ov.addEventListener("pointercancel",endDrag);
-  ov.addEventListener("touchstart",function(e){ if(drag) e.preventDefault(); },{passive:false});
-  ov.addEventListener("touchmove",function(e){ if(drag) e.preventDefault(); },{passive:false});
+  /* mouse and pen */
+  ov.addEventListener("pointerdown",function(e){
+    if(!state.item || !L || e.pointerType === "touch") return;
+    if(begin(pt(e))){ try{ ov.setPointerCapture(e.pointerId); }catch(_){} e.preventDefault(); }
+  });
+  ov.addEventListener("pointermove",function(e){ if(drag && e.pointerType !== "touch") moveTo(pt(e)); });
+  ov.addEventListener("pointerup",function(e){ if(e.pointerType !== "touch") endDrag(); });
+  ov.addEventListener("pointercancel",function(e){ if(e.pointerType !== "touch") endDrag(); });
+  /* fingers (iPhone, iPad, Android): only blocks page scrolling while a cover is actually being dragged */
+  var tpt = function(e){ var t = e.touches[0] || e.changedTouches[0]; return pt(t); };
+  ov.addEventListener("touchstart",function(e){ if(!state.item || !L || e.touches.length !== 1) return; if(begin(tpt(e))) e.preventDefault(); },{passive:false});
+  ov.addEventListener("touchmove",function(e){ if(drag){ e.preventDefault(); moveTo(tpt(e)); } },{passive:false});
+  ov.addEventListener("touchend",endDrag); ov.addEventListener("touchcancel",endDrag);
   $("#addCover").addEventListener("click",function(){
     if(!state.item) return;
     state.item.covers.push({ x:.35, y:.3, w:.3, h:.2 }); say("Added a cover. Drag it onto the artist you want hidden."); redraw();
@@ -731,20 +755,52 @@ function detectTiles(img){
   });
 
   /* ---------- upload (tap, drop or paste) + username ---------- */
+  /* Reads the file as a data: URL (hosted pages often block blob: URLs), with a decoder fallback for odd formats. */
+  function shrink(im){
+    var s = Math.min(1, 1600/im.naturalWidth, 7000/im.naturalHeight);
+    if(s >= 1) return Promise.resolve(im);
+    return new Promise(function(res,rej){
+      var c = document.createElement("canvas"); c.width = Math.round(im.naturalWidth*s); c.height = Math.round(im.naturalHeight*s);
+      c.getContext("2d").drawImage(im,0,0,c.width,c.height);
+      var o = new Image(); o.onload = function(){ res(o); }; o.onerror = rej; o.src = c.toDataURL("image/png");
+    });
+  }
+  function readAsImage(f){
+    return new Promise(function(resolve,reject){
+      var fr = new FileReader();
+      fr.onerror = function(){ reject(new Error("read")); };
+      fr.onload = function(){
+        var im = new Image();
+        im.onload = function(){ shrink(im).then(resolve,function(){ resolve(im); }); };
+        im.onerror = function(){
+          if(!window.createImageBitmap){ reject(new Error("decode")); return; }
+          createImageBitmap(f).then(function(bmp){
+            var c = document.createElement("canvas"); c.width = bmp.width; c.height = bmp.height;
+            c.getContext("2d").drawImage(bmp,0,0);
+            var im2 = new Image(); im2.onload = function(){ resolve(im2); }; im2.onerror = function(){ reject(new Error("decode")); };
+            im2.src = c.toDataURL("image/png");
+          }).catch(function(){ reject(new Error("decode")); });
+        };
+        im.src = fr.result;
+      };
+      fr.readAsDataURL(f);
+    });
+  }
   function takeFile(f){
     if(!f) return;
     if(f.type && f.type.indexOf("image/") !== 0){ say("That doesn't look like an image. Try a PNG or JPG screenshot."); return; }
-    var url = URL.createObjectURL(f), im = new Image();
-    im.onload = function(){
-      if(state.item) URL.revokeObjectURL(state.item.url);
-      state.item = { img:im, url:url, name:f.name || "pasted screenshot", covers:autoCovers(im), code:defaultCode() };
+    say("Opening your screenshot…");
+    readAsImage(f).then(function(im){
+      state.item = { img:im, url:"", name:f.name || "pasted screenshot", covers:autoCovers(im), code:defaultCode() };
       $("#fileName").textContent = state.item.name; $("#fallback").hidden = true;
       say(state.item.covers.length > 1 ? "Covered " + state.item.covers.length + " artists automatically. Check it looks right." : "");
+      if(!ready) say("Almost ready, your image will appear in a moment…");
       redraw();
       var s = $("#stage"); if(s.scrollIntoView) s.scrollIntoView({ behavior:"smooth", block:"center" });
-    };
-    im.onerror = function(){ URL.revokeObjectURL(url); say("That file couldn't be opened. Try a PNG or JPG screenshot."); };
-    im.src = url;
+    }).catch(function(){
+      var heic = /hei[cf]/i.test((f.type||"") + " " + (f.name||""));
+      say(heic ? "This looks like an HEIC photo, which this browser can't open. Take a normal screenshot (PNG) or convert it to JPG." : "That file couldn't be opened. Try a PNG or JPG screenshot.");
+    });
   }
   var drop = $("#drop"), fileIn = $("#file");
   drop.addEventListener("click",function(){ fileIn.click(); });
@@ -758,30 +814,59 @@ function detectTiles(img){
     for(var i=0;i<items.length;i++){ if(items[i].type.indexOf("image/") === 0){ takeFile(items[i].getAsFile()); break; } }
   });
   $("#clear").addEventListener("click",function(){
-    if(state.item){ URL.revokeObjectURL(state.item.url); state.item = null; }
+    if(state.item){ state.item = null; }
     $("#fallback").hidden = true; say(""); redraw();
   });
   $("#user").addEventListener("input",function(e){ state.user = e.target.value.replace(/^@+/,""); save("user",state.user); schedule(); });
 
   /* ---------- download ---------- */
-  var dlP = (window.claude && window.claude.use ? window.claude.use("downloads") : Promise.resolve(null)).catch(function(){ return null; });
-  function showFallback(c){
+  /* never let a missing/odd download capability break the page */
+  var dlP = Promise.resolve().then(function(){
+    return (window.claude && typeof window.claude.use === "function") ? window.claude.use("downloads") : null;
+  }).then(function(d){ return (d && typeof d.save === "function") ? d : null; }).catch(function(){ return null; });
+  function showFallback(c,msg){
     var box = $("#fallback"); box.innerHTML = ""; box.hidden = false;
-    var p = document.createElement("p"); p.textContent = "Saving isn't available here. Press and hold the image to save it.";
+    var p = document.createElement("p"); p.textContent = msg || "Press and hold (or right-click) the image below to save it.";
     var im = document.createElement("img"); im.alt = "Your finished voting proof"; im.src = c.toDataURL("image/png");
     box.appendChild(p); box.appendChild(im);
+    if(box.scrollIntoView) box.scrollIntoView({ behavior:"smooth", block:"nearest" });
+  }
+  function anchorSave(blob,name){
+    try{
+      var u = URL.createObjectURL(blob), a = document.createElement("a");
+      a.href = u; a.download = name; a.style.display = "none"; document.body.appendChild(a); a.click();
+      setTimeout(function(){ document.body.removeChild(a); URL.revokeObjectURL(u); }, 4000);
+      return true;
+    }catch(_){ return false; }
   }
   $("#dl").addEventListener("click",function(){
     if(!state.item) return;
-    var c = document.createElement("canvas"); draw(c,state.item);
-    c.toBlob(function(blob){
-      var name = "enchin-" + state.tpl + "-vote.png";
+    var c = document.createElement("canvas");
+    try{ draw(c,state.item); }catch(err){ say("Couldn't build the image. Try Start over and add the screenshot again."); return; }
+    var name = "enchin-" + state.tpl + "-vote.png", done = "Saved! Make sure the certificate number is fully covered before you post.";
+    var finish = function(blob){
+      if(!blob){ showFallback(c); say("Made your image. Press and hold it to save."); return; }
       dlP.then(function(d){
-        if(!d){ showFallback(c); return; }
-        return d.save({ filename:name, data:blob }).then(function(){ $("#fallback").hidden = true; say("Saved! Make sure the certificate number is fully covered before you post."); })
-          .catch(function(err){ if(err && err.code === "declined"){ say("Download cancelled."); return; } showFallback(c); });
+        if(d){
+          return d.save({ filename:name, data:blob }).then(function(){ $("#fallback").hidden = true; say(done); })
+            .catch(function(err){ if(err && err.code === "declined"){ say("Download cancelled."); return; } showFallback(c); });
+        }
+        var ios = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+        if(ios && navigator.share && navigator.canShare){
+          var file = null; try{ file = new File([blob],name,{ type:"image/png" }); }catch(_){}
+          if(file && navigator.canShare({ files:[file] })){
+            return navigator.share({ files:[file] }).then(function(){ say("Pick Save Image to keep it. " + done); })
+              .catch(function(err){
+                if(err && err.name === "AbortError"){ say("Share cancelled. Tap Download again, or press and hold the image."); showFallback(c); return; }
+                showFallback(c); say(done);
+              });
+          }
+        }
+        /* no host download API: try a normal download and also show the image to press-and-hold */
+        anchorSave(blob,name); showFallback(c,"If your download didn't start, press and hold (or right-click) the image to save it."); say(done);
       });
-    },"image/png");
+    };
+    try{ c.toBlob(finish,"image/png"); }catch(_){ finish(null); }
   });
 
   /* ---------- boot ---------- */
@@ -790,7 +875,9 @@ function detectTiles(img){
   var u0 = recall("user"); if(u0){ state.user = u0; $("#user").value = u0; }
   say("Getting your Enchin ready…");
   var fonts = document.fonts && document.fonts.load ? Promise.all([document.fonts.load("800 40px \"Baloo 2\""), document.fonts.load("700 20px \"Nunito\""), document.fonts.load("40px \"Chewy\"")]).catch(function(){}) : Promise.resolve();
-  Promise.all([loadAll(),fonts]).then(function(){ ready = true; say(""); applyTheme(); redraw(); });
+  var bootDone = function(){ if(ready) return; ready = true; say(""); try{ applyTheme(); redraw(); }catch(e){ console.error(e); } };
+  var withTimeout = function(p,ms){ return Promise.race([p, new Promise(function(r){ setTimeout(r,ms); })]); };
+  withTimeout(Promise.all([loadAll(), withTimeout(fonts,2500)]),8000).then(bootDone, bootDone);
   applyTheme();
 })();
 </script>
