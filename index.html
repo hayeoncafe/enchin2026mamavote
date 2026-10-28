@@ -159,7 +159,7 @@ body{
           <canvas id="cv" role="img" aria-label="Your voting proof with the Enchin overlay"></canvas>
           <canvas id="ov" aria-hidden="true"></canvas>
         </div>
-        <p class="help" id="fitHint" hidden>Every artist except ENHYPEN gets covered automatically. Missed a spot? Drag a cover into place, pull its corner square to resize, tap its × to remove it, or add another. The guides won't be in your download.</p>
+        <p class="help" id="fitHint" hidden>With three photos, the middle one is covered automatically (ENHYPEN stays on both sides). Otherwise every artist except ENHYPEN gets covered. Missed a spot? Drag a cover into place, pull its corner square to resize, tap its × to remove it, or add another. The guides won't be in your download.</p>
         <div class="tools" id="tools" hidden>
           <button class="btn soft" id="addCover" type="button">+ Add a cover</button>
           <button class="btn soft" id="autoFit" type="button">Auto-fit covers</button>
@@ -518,8 +518,14 @@ function detectTiles(img){
   } }
   var y0 = Math.floor(h*.25), y1 = Math.floor(h*.58), x0 = Math.floor(w*.08), x1 = Math.floor(w*.92), T = 12;
   var col = new Array(w).fill(0), row = new Array(h).fill(0);
-  for(yy=y0;yy<y1;yy++){ for(xx=x0;xx<x1;xx++){ if(E[yy*w+xx] > T){ col[xx]++; row[yy]++; } } }
-  var cs = segs(col,x0,x1,Math.max(12,Math.round((y1-y0)*.09)),3,Math.round(w*.07)), rs = segs(row,y0,y1,Math.max(12,Math.round((x1-x0)*.09)),3,Math.round(h*.045));
+  for(yy=y0;yy<y1;yy++){ for(xx=x0;xx<x1;xx++){ if(E[yy*w+xx] > T){ row[yy]++; } } }
+  var rs = segs(row,y0,y1,Math.max(12,Math.round((x1-x0)*.09)),3,Math.round(h*.045));
+  if(!rs.length) return [];
+  /* measure columns only inside the photo row, so the title and caption text can't join the tiles together */
+  var band = rs.reduce(function(a,b){ return (b[1]-b[0]) > (a[1]-a[0]) ? b : a; });
+  for(yy=band[0];yy<=band[1];yy++){ for(xx=x0;xx<x1;xx++){ if(E[yy*w+xx] > T) col[xx]++; } }
+  var cs = segs(col,x0,x1,Math.max(6,Math.round((band[1]-band[0]+1)*.2)),3,Math.round(w*.07));
+  rs = [band];
   if(!cs.length || !rs.length) return [];
   var tw = Math.max.apply(null,cs.map(function(s){ return s[1]-s[0]+1; })), th = Math.max.apply(null,rs.map(function(s){ return s[1]-s[0]+1; }));
   var tiles = [], r, q;
@@ -538,7 +544,9 @@ function detectTiles(img){
       var tiles = detectTiles(img);
       if(tiles.length < 2) return defaultCovers();
       var pad = .005, padY = pad*img.naturalWidth/img.naturalHeight;
-      return tiles.slice(1).map(function(q){
+      /* three photos: ENHYPEN is on both sides, so only the middle one is covered */
+      var toCover = tiles.length === 3 ? [tiles[1]] : tiles.slice(1);
+      return toCover.map(function(q){
         var x = Math.max(0,q.x-pad), y = Math.max(0,q.y-padY);
         return { x:x, y:y, w:Math.min(1-x,q.w+2*pad), h:Math.min(1-y,q.h+2*padY) };
       });
